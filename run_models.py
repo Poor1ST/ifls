@@ -2,15 +2,53 @@ import pandas as pd
 import numpy as np
 import statsmodels.api as sm
 import patsy
+import matplotlib.pyplot as plt
+import seaborn as sns
+import os
 import warnings
 warnings.filterwarnings('ignore')
 
 df = pd.read_csv('clean_data/data_clean_weighted.csv')
 print(f"Total rows: {len(df)}")
 print(f"Columns: {df.columns.tolist()}")
-print(f"Sex distribution:\n{df['sex'].value_counts()}")
-print(f"ever_married distribution:\n{df['ever_married'].value_counts()}")
-print(f"is_divorced distribution:\n{df['is_divorced'].value_counts()}")
+
+print("\n" + "="*20 + " VARIABLE DISTRIBUTIONS " + "="*20)
+for col in df.columns:
+    print(f"\nVariable: {col} | Type: {df[col].dtype} | Missing: {df[col].isna().sum()}")
+    if df[col].nunique() <= 10 or df[col].dtype == 'object':
+        # Categorical/Binary: Compare unweighted vs weighted percentages
+        unweighted = df[col].value_counts(normalize=True, dropna=False) * 100
+        weighted = (df.groupby(col, dropna=False)['pwt14xa'].sum() / df['pwt14xa'].sum()) * 100
+        dist_table = pd.DataFrame({'Unweighted %': unweighted, 'Weighted %': weighted}).round(2)
+        print(dist_table)
+    else:
+        # Continuous: Standard descriptive statistics
+        print(df[col].describe().round(4))
+print("\n" + "="*64 + "\n")
+
+# --- VISUAL DISTRIBUTION CHECK ---
+print("Generating distribution plots to check for normality...")
+if not os.path.exists('plots'):
+    os.makedirs('plots')
+
+sns.set_theme(style="whitegrid")
+
+# Continuous variables: check histograms and KDE for normality
+for col in ['age', 'monthly_income', 'log_income', 'education']:
+    plt.figure(figsize=(8, 5))
+    sns.histplot(df[col].dropna(), kde=True, color='teal', bins=30)
+    plt.title(f'Distribution of {col}')
+    plt.savefig(f'plots/dist_{col}.png')
+    plt.close()
+
+# Categorical/Binary variables
+for col in ['sex', 'urban', 'ever_married', 'is_divorced']:
+    plt.figure(figsize=(8, 5))
+    sns.countplot(data=df, x=col, palette='Set2')
+    plt.title(f'Count of {col}')
+    plt.savefig(f'plots/count_{col}.png')
+    plt.close()
+print("Plots saved to the 'plots/' folder.\n")
 
 def run_weighted_model(df_sub, outcome, formula_rhs, label):
     pred_cols = [c.strip() for c in formula_rhs.replace('~','').split('+')]
